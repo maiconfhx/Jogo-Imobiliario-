@@ -82,7 +82,7 @@
       c.classList.toggle('mort', !!(pr && pr.mortgaged));
       if (!pr) { c.style.boxShadow = ''; return; }
       var o = G.P(state, pr.owner), d = document.createElement('div');
-      c.style.boxShadow = 'inset 0 0 0 0.28vw ' + color(o);
+      c.style.boxShadow = 'inset 0 0 0 5px ' + color(o);
       d.className = 'own';
       d.style.background = color(o);
       d.innerHTML = pr.mortgaged ? 'HIPOTECA' : (pr.houses === 5 ? '🏨' : new Array(pr.houses + 1).join('🏠')) || esc(o.name);
@@ -113,9 +113,9 @@
           tokensEl.appendChild(t);
         }
         var cols = Math.min(list.length, 3), row = Math.floor(k / 3), col = k % 3;
-        var dx = (col - (cols - 1) / 2) * 2.4, dy = 0.9 + (list.length > 3 ? (row - 0.5) * 2.4 : 0);
-        t.style.left = 'calc(' + ((p0[1] - 0.5) / 12 * 100) + '% + ' + dx + 'vw)';
-        t.style.top = 'calc(' + ((p0[0] - 0.5) / 8 * 100) + '% + ' + dy + 'vw)';
+        var dx = (col - (cols - 1) / 2) * 46, dy = 17 + (list.length > 3 ? (row - 0.5) * 46 : 0);
+        t.style.left = 'calc(' + ((p0[1] - 0.5) / 12 * 100) + '% + ' + dx + 'px)';
+        t.style.top = 'calc(' + ((p0[0] - 0.5) / 8 * 100) + '% + ' + dy + 'px)';
         t.classList.toggle('active', state.phase === 'playing' && G.cur(state).id === p.id);
         t.classList.toggle('jailed', !!p.inJail && shown[p.id] === p.pos);
       });
@@ -225,6 +225,30 @@
       if (G.apply(state, a)) onState();
     }
   });
+
+  /* Ajusta o tabuleiro à área realmente visível (o Silk tem barra de endereço e pode dar zoom na página). */
+  function fit() {
+    var vv = window.visualViewport;
+    var w = vv ? vv.width : window.innerWidth, h = vv ? vv.height : window.innerHeight;
+    var ox = vv ? vv.offsetLeft : 0, oy = vv ? vv.offsetTop : 0;
+    if (!(w > 0 && h > 0)) return;
+    var s = Math.min(w / 1920, h / 1080) * 0.97;
+    board.style.transform = 'translate(' + (ox + (w - 1920 * s) / 2) + 'px,' + (oy + (h - 1080 * s) / 2) + 'px) scale(' + s + ')';
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fit);
+    window.visualViewport.addEventListener('scroll', fit);
+  }
+  setInterval(fit, 1000);
+  // Qualquer clique do controle remoto tenta entrar em tela cheia (esconde a barra do navegador)
+  function goFull() {
+    var d = document.documentElement, f = d.requestFullscreen || d.webkitRequestFullscreen;
+    try { if (f && !(document.fullscreenElement || document.webkitFullscreenElement)) { var r = f.call(d); if (r && r.catch) r.catch(function () {}); } } catch (e) {}
+  }
+  document.addEventListener('click', goFull);
+  document.addEventListener('keydown', goFull);
 
   syncShown();
   render();
