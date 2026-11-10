@@ -4,18 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Magnatas — Tabuleiro (TV)</title>
-<link rel="stylesheet" href="css/tv.css">
+<link rel="stylesheet" href="css/tv3d.css">
 </head>
 <body>
-<div id="board">
-  <div id="center"></div>
-  <div id="tokens"></div>
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <div id="hud">
+    <div class="logo">MAGNATAS<small>o jogo das cidades</small></div>
+    <div id="roominfo"></div>
+    <div id="lobby"></div>
+    <div id="game">
+      <div id="players"></div>
+      <div id="mid"><div id="turn"></div><div id="status"></div><div id="card"></div></div>
+      <div id="log"></div>
+    </div>
+  </div>
 </div>
 <script src="vendor/peerjs.min.js"></script>
 <script src="vendor/qrcode.js"></script>
+<script src="vendor/three.min.js"></script>
 <script src="js/board.js"></script>
 <script src="js/game.js"></script>
 <script src="js/common.js"></script>
-<script src="js/tv.js"></script>
+<script src="js/tv3d.js"></script>
 </body>
 </html>

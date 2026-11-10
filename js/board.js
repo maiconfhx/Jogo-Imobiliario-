@@ -82,7 +82,7 @@
   ];
 
   var COLORS = ['#ff5252', '#40c4ff', '#ffd740', '#69f0ae', '#e040fb', '#ff9e40'];
-  var TOKENS = ['🚗', '🎩', '🐶', '🚀', '🦄', '⚽'];
+  var TOKENS = ['🎩', '🧢', '👑', '👒', '🎀', '🐱'];
 
   var B = {
     GROUPS: GROUPS, SPACES: SPACES, CARDS: CARDS, COLORS: COLORS, TOKENS: TOKENS,

@@ -41,7 +41,8 @@ Se a TV ou o celular forem recarregados, a partida continua de onde parou. Para 
 
 ## Desenvolvimento
 
-- `index.html` + `js/tv.js`: tabuleiro e autoridade do jogo (TV).
+- `index.html` + `js/tv3d.js`: tabuleiro 3D (Three.js) e autoridade do jogo (TV). Personagens, dados e construções animados.
+- `plano.html` + `js/tv.js`: tabuleiro plano (2D), usado automaticamente se a TV não tiver WebGL.
 - `controle.html` + `js/phone.js`: maquininha (celular).
 - `js/game.js`: regras; `js/board.js`: casas, preços e cartas.
 - Teste das regras: `node test/fuzz.js`.
