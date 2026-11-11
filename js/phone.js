@@ -13,7 +13,8 @@
   var lastRoll = -1, lastPay = -1, lastTurn = null, rolling = false;
 
   function send(a) {
-    if (!net || !net.send({ t: 'act', a: a })) flash('Sem conexão com a TV…', 'bad');
+    if (!net) return;
+    if (!net.send({ t: 'act', a: a })) flash('Reconectando com a TV…<br><small>Sua ação será enviada assim que voltar.</small>', 'bad', 2500);
   }
   function mine() { return state.players.filter(function (p) { return p.device === device; }); }
   function color(p) { return B.COLORS[p.ci]; }
@@ -32,7 +33,7 @@
   /* ---------- telas ---------- */
   function header() {
     return '<header><span><i class="dot ' + (online ? 'on' : 'off') + '"></i>' + (room ? 'Sala ' + esc(room) : 'Sem sala') +
-      '</span><b>MAGNATAS</b></header>';
+      '</span><b>MAGNATAS</b></header>' + (state && !online ? '<div class="offline">Reconectando com a TV…</div>' : '');
   }
 
   function viewRoom() {
@@ -137,7 +138,7 @@
   function tabProps(v) {
     var list = G.owned(state, v.id), myTurn = G.cur(state).id === v.id && state.phase === 'playing';
     if (!list.length) return '<div class="msg">' + esc(v.name) + ' ainda não tem imóveis.</div>';
-    var h = myTurn ? '' : '<p class="note">Construir e hipotecar só na sua vez.</p>';
+    var h = myTurn ? '' : '<p class="note warn">Construir e hipotecar só na sua vez de jogar.</p>';
     list.forEach(function (i) {
       var sp = B.SPACES[i], pr = state.props[i];
       var bg = sp.t === 'prop' ? B.GROUPS[sp.group].color : '#5d6d7e';
@@ -149,14 +150,18 @@
         }).join('') + '<button class="mini" data-a="give" data-i="-1">cancelar</button></div>';
       } else {
         h += '<div class="pbtns">';
-        if (sp.t === 'prop' && G.hasSet(state, v.id, i)) {
-          h += '<button class="mini" data-a="build" data-i="' + i + '"' + (myTurn && G.canBuild(state, v.id, i) ? '' : ' disabled') + '>+🏠 ' + money(G.houseCost(i)) + '</button>';
-          if (pr.houses) h += '<button class="mini" data-a="sell" data-i="' + i + '"' + (myTurn && G.canSell(state, v.id, i) ? '' : ' disabled') + '>−🏠 +' + money(G.houseCost(i) / 2) + '</button>';
+        var why = '';
+        if (sp.t === 'prop' && pr.houses < 5) {
+          why = myTurn ? G.buildBlock(state, v.id, i) : '';
+          h += '<button class="mini build" data-a="build" data-i="' + i + '"' + (myTurn && !why ? '' : ' disabled') + '>' +
+            (pr.houses === 4 ? '+🏨 Hotel ' : '+🏠 Casa ') + money(G.houseCost(i)) + '</button>';
         }
+        if (sp.t === 'prop' && pr.houses) h += '<button class="mini" data-a="sell" data-i="' + i + '"' + (myTurn && G.canSell(state, v.id, i) ? '' : ' disabled') + '>−🏠 +' + money(G.houseCost(i) / 2) + '</button>';
         if (pr.mortgaged) h += '<button class="mini" data-a="unmortgage" data-i="' + i + '"' + (myTurn && v.money >= G.unmortgageCost(i) ? '' : ' disabled') + '>Resgatar ' + money(G.unmortgageCost(i)) + '</button>';
         else h += '<button class="mini" data-a="mortgage" data-i="' + i + '"' + (myTurn && G.canMortgage(state, v.id, i) ? '' : ' disabled') + '>Hipotecar +' + money(G.mortgageValue(i)) + '</button>';
         if (G.groupClear(state, i)) h += '<button class="mini" data-a="give" data-i="' + i + '">Passar 🤝</button>';
         h += '</div>';
+        if (why) h += '<div class="why">' + esc(why) + '</div>';
       }
       h += '</div>';
     });
@@ -191,6 +196,11 @@
         return '<button class="mini" data-a="ask" data-c="claim" data-p="' + p.id + '">' + esc(p.name) + '</button>';
       }).join('') + '</div>';
     }
+    var free = G.freeBuild(state);
+    h += '<h3>Regra de construção</h3><div class="dest">' +
+      '<button class="mini' + (free ? ' sel' : '') + '" data-a="rules" data-k="livre">Em qualquer imóvel</button>' +
+      '<button class="mini' + (!free ? ' sel' : '') + '" data-a="rules" data-k="grupo">Só com o grupo completo</button></div>' +
+      '<p class="note">' + (free ? 'Dá para construir em qualquer imóvel seu.' : 'Regra clássica: precisa de todos os imóveis da cor e construir por igual.') + '</p>';
     h += '<h3>Partida</h3><button class="btn danger" data-a="ask" data-c="reset">ENCERRAR E VOLTAR À SALA DE ESPERA</button>';
     return h;
   }
@@ -325,6 +335,7 @@
         ui.amount = '';
         break;
       case 'reset': send({ type: 'reset' }); return;
+      case 'rules': send({ type: 'rules', build: k }); return;
       case 'ask': ui.confirm = { c: t.getAttribute('data-c'), p: pid }; break;
       case 'no': ui.confirm = null; break;
       case 'yes':

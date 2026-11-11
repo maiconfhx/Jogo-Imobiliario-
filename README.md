@@ -24,14 +24,21 @@ Não tem servidor: é um site estático. A TV e os celulares conversam direto po
 3. No celular, adicione os jogadores e toque em **Começar jogo**.
 4. Na sua vez: **Jogar dados** → o peão anda na TV → compre, pague ou encerre a vez pelo celular.
 
-Se a TV ou o celular forem recarregados, a partida continua de onde parou. Para recomeçar do zero, use
+Se a TV ou o celular forem recarregados, a partida continua de onde parou. Se a conexão cair, o celular reconecta
+sozinho e envia a última ação que ficou pendente.
+
+**Dica para o Fire TV:** em *Configurações → Tela e sons → Protetor de tela → Iniciar em*, escolha **Nunca**.
+Durante o jogo ninguém mexe no controle, e o protetor de tela pode pausar o navegador e derrubar os celulares.
+Deixe o jogo aberto em uma só aba do Silk. Para recomeçar do zero, use
 **Menu → Encerrar** no celular (ou abra a TV com `?nova=1` no fim do endereço).
 
 ## Regras resumidas
 
 - Todos começam com $ 1.500 e recebem $ 200 ao passar pela Partida.
 - Parou em imóvel sem dono: pode comprar. Com dono: paga aluguel na maquininha.
-- Grupo de cor completo dobra o aluguel e libera a construção de casas (até 4) e hotel, sempre de forma equilibrada no grupo.
+- Grupo de cor completo dobra o aluguel.
+- Construção (na sua vez, em **Imóveis**): até 4 casas e depois um hotel. Por padrão dá para construir em qualquer imóvel seu;
+  em **Menu → Regra de construção** dá para trocar para a regra clássica (só com o grupo completo, construindo por igual).
 - Transportes: aluguel de $ 25 / 50 / 100 / 200 conforme quantos o dono tem.
 - Dupla nos dados joga de novo; três duplas seguidas levam à cadeia.
 - Cadeia: tente tirar dupla (até 3 vezes), pague $ 50 de fiança ou use o cartão de habeas corpus.

@@ -7,11 +7,13 @@ var ended = 0, steps = 0;
 for (var g = 0; g < 300; g++) {
   var s = G.newState('TEST'), n = 2 + Math.floor(rng() * 5);
   for (var i = 0; i < n; i++) G.apply(s, { type: 'join', name: 'J' + i, device: 'd' }, rng);
+  if (g % 2) G.apply(s, { type: 'rules', build: 'grupo' }, rng);
   if (!G.apply(s, { type: 'start' }, rng)) throw new Error('start');
   for (var t = 0; t < 6000 && s.phase === 'playing'; t++) {
     var p = G.cur(s), own = G.owned(s, p.id), a;
     var r = rng();
-    if (r < 0.15 && own.length) a = { type: pick(['build', 'build', 'sell', 'mortgage', 'unmortgage']), pid: p.id, space: pick(own) };
+    if (r < 0.005) a = { type: 'rules', build: rng() < 0.5 ? 'livre' : 'grupo' };
+    else if (r < 0.15 && own.length) a = { type: pick(['build', 'build', 'sell', 'mortgage', 'unmortgage']), pid: p.id, space: pick(own) };
     else if (r < 0.17) a = { type: 'transfer', pid: p.id, to: pick(s.players).id, amount: Math.floor(rng() * 50) };
     else if (r < 0.18 && own.length) a = { type: 'giveProp', pid: p.id, space: pick(own), to: pick(s.players).id };
     else if (s.step === 'roll') a = { type: p.inJail ? pick(['roll', 'jailPay', 'jailCard']) : 'roll', pid: p.id };
@@ -34,6 +36,7 @@ for (var g = 0; g < 300; g++) {
       var pr = s.props[k], o = G.P(s, pr.owner);
       if (!o || o.bankrupt) throw new Error('dono inválido');
       if (pr.houses < 0 || pr.houses > 5 || (pr.houses && pr.mortgaged)) throw new Error('casas');
+      if (a.type === 'build' && G.buildBlock(s, p.id, a.space) === '' && !G.canBuild(s, p.id, a.space) && p.money >= G.houseCost(a.space)) throw new Error('buildBlock diverge');
     });
     if (s._rng) throw new Error('_rng vazou');
   }

@@ -16,7 +16,8 @@
   var state = null;
   try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   if (C.qs('nova') || !state || !state.room || !state.players) state = G.newState(C.qs('sala').toUpperCase() || newRoom());
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  var retired = false;
+  function save() { if (retired) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   save();
   C.dropParam('nova');
 
@@ -68,7 +69,7 @@
     return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
   })();
 
-  var netOn = false, phones = 0;
+  var netOn = false, netBusy = false, phones = 0;
   var shown = {};       // posição exibida de cada peão
   var tokenEls = {};
   var lastRoll = state.rollSeq, lastCard = state.card ? state.card.seq : 0, lastPay = state.pay ? state.pay.seq : 0;
@@ -146,7 +147,7 @@
         '<div class="joined">' + (state.players.length ? state.players.map(function (p) {
           return '<span class="chip" style="border-color:' + color(p) + '">' + B.TOKENS[p.ci] + ' ' + esc(p.name) + '</span>';
         }).join('') : '<i>Nenhum jogador ainda…</i>') + '</div>' +
-        '<p class="hint">' + (netOn ? (state.players.length >= 2 ? 'Toque em <b>Começar</b> no celular!' : 'O celular é a maquininha de cartão e o dado. Dá para jogar todos no mesmo celular.') : 'Conectando à internet…') + '</p></div>';
+        '<p class="hint">' + (netBusy ? 'A sala está aberta em outra aba ou aparelho. Tentando de novo…' : netOn ? (state.players.length >= 2 ? 'Toque em <b>Começar</b> no celular!' : 'O celular é a maquininha de cartão e o dado. Dá para jogar todos no mesmo celular.') : 'Conectando à internet…') + '</p></div>';
     } else {
       var cur = G.cur(state);
       el.players.innerHTML = state.players.map(function (p) {
@@ -205,16 +206,16 @@
 
   /* ---------- rede ---------- */
   var net = C.host(state.room, {
-    status: function (s) { netOn = s === 'on'; render(); },
+    status: function (s) { netOn = s === 'on'; netBusy = s === 'busy'; render(); },
     count: function (n) { phones = n; render(); },
     join: function () {},
     taken: function () {
-      // Sala ocupada (ex.: a página foi recarregada agora há pouco). Tenta de novo; se for sala nova, troca o código.
-      if (state.phase === 'lobby' && !state.players.length) { state.room = newRoom(); save(); }
-      setTimeout(function () { location.reload(); }, 3000);
+      // Sala ocupada (outra aba aberta, ou o servidor ainda não soltou a sala depois de recarregar).
+      // Com a sala vazia, troca o código; senão a própria conexão tenta de novo a cada 5 s.
+      if (state.phase === 'lobby' && !state.players.length) { state.room = newRoom(); save(); location.reload(); }
     },
     data: function (d, conn) {
-      if (!d || typeof d !== 'object') return;
+      if (retired || !d || typeof d !== 'object') return;
       if (d.t === 'hello') { conn.device = String(d.device || ''); conn.send({ t: 'state', state: state }); return; }
       if (d.t !== 'act' || !d.a || !conn.device) return;
       var a = d.a;
@@ -254,7 +255,9 @@
   syncShown();
   render();
   C.wakeLock();
+  C.keepAwake();
+  C.claimTab(function () { retired = true; net.stop(); });
   C.autoUpdate(function () { return !animating; });
   // Mantém a tela "viva" e reenvia o estado de tempos em tempos (cura celulares que perderam uma mensagem)
-  setInterval(function () { net.broadcast({ t: 'state', state: state }); }, 5000);
+  setInterval(function () { if (!retired) net.broadcast({ t: 'state', state: state }); }, 4000);
 })();

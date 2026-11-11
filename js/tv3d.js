@@ -22,7 +22,8 @@
   var state = null;
   try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   if (C.qs('nova') || !state || !state.room || !state.players) state = G.newState(C.qs('sala').toUpperCase() || newRoom());
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  var retired = false;
+  function save() { if (retired) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   save();
   C.dropParam('nova');
 
@@ -418,7 +419,7 @@
     q.addData(joinUrl); q.make();
     return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
   })();
-  var netOn = false, phones = 0;
+  var netOn = false, netBusy = false, phones = 0;
 
   function statusText() {
     var p = G.cur(state), n = '<b style="color:' + color(p) + '">' + esc(p.name) + '</b>';
@@ -442,7 +443,7 @@
         '<div class="joined">' + (state.players.length ? state.players.map(function (p) {
           return '<span class="chip" style="border-color:' + color(p) + '">' + B.TOKENS[p.ci] + ' ' + esc(p.name) + '</span>';
         }).join('') : '<i>Nenhum jogador ainda…</i>') + '</div>' +
-        '<p class="hint">' + (netOn ? (state.players.length >= 2 ? 'Toque em <b>Começar</b> no celular!' : 'O celular é a maquininha de cartão e o dado.') : 'Conectando à internet…') + '</p></div>';
+        '<p class="hint">' + (netBusy ? 'A sala está aberta em outra aba ou aparelho. Tentando de novo…' : netOn ? (state.players.length >= 2 ? 'Toque em <b>Começar</b> no celular!' : 'O celular é a maquininha de cartão e o dado.') : 'Conectando à internet…') + '</p></div>';
       return;
     }
     var cur = G.cur(state);
@@ -506,15 +507,16 @@
 
   /* ================= rede ================= */
   var net = C.host(state.room, {
-    status: function (s) { netOn = s === 'on'; renderHud(); },
+    status: function (s) { netOn = s === 'on'; netBusy = s === 'busy'; renderHud(); },
     count: function (n) { phones = n; renderHud(); },
     join: function () {},
     taken: function () {
-      if (state.phase === 'lobby' && !state.players.length) { state.room = newRoom(); save(); }
-      setTimeout(function () { location.reload(); }, 3000);
+      // Sala ocupada (outra aba aberta, ou o servidor ainda não soltou a sala depois de recarregar).
+      // Com a sala vazia, troca o código; senão a própria conexão tenta de novo a cada 5 s.
+      if (state.phase === 'lobby' && !state.players.length) { state.room = newRoom(); save(); location.reload(); }
     },
     data: function (d, conn) {
-      if (!d || typeof d !== 'object') return;
+      if (retired || !d || typeof d !== 'object') return;
       if (d.t === 'hello') { conn.device = String(d.device || ''); conn.send({ t: 'state', state: state }); return; }
       if (d.t !== 'act' || !d.a || !conn.device) return;
       var a = d.a;
@@ -556,6 +558,7 @@
   var last = 0, slow = 0, frames = 0;
   function frame(now) {
     requestAnimationFrame(frame);
+    if (last && now - last < 31) return;   // até 30 quadros por segundo: alivia o Fire Stick
     var dt = Math.min(0.1, (now - last) / 1000 || 0.016);
     last = now; clock += dt;
     // se a TV não estiver dando conta, reduz a resolução do 3D
@@ -604,7 +607,9 @@
   renderHud();
   requestAnimationFrame(frame);
   C.wakeLock();
+  C.keepAwake();
+  C.claimTab(function () { retired = true; net.stop(); });
   C.autoUpdate(function () { return !animating; });
-  setInterval(function () { net.broadcast({ t: 'state', state: state }); }, 5000);
+  setInterval(function () { if (!retired) net.broadcast({ t: 'state', state: state }); }, 4000);
   window.__magnatas = { state: function () { return state; }, apply: function (a) { if (G.apply(state, a)) onState(); } };
 })();

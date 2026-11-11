@@ -7,7 +7,7 @@
     return {
       room: room, phase: 'lobby', players: [], props: {}, turn: 0, step: 'roll',
       dice: [1, 1], rollSeq: 0, dbl: 0, pending: null, card: null, move: null, pay: null,
-      deck: [], log: [], seq: 0, nextId: 1, winner: null
+      deck: [], log: [], seq: 0, nextId: 1, winner: null, rules: { build: 'livre' }
     };
   }
 
@@ -51,19 +51,44 @@
   function mortgageValue(i) { return B.SPACES[i].price / 2; }
   function unmortgageCost(i) { return Math.ceil(B.SPACES[i].price * 0.55); }
 
+  /* Regra de construção: 'livre' (padrão) = constrói em qualquer imóvel seu;
+     'grupo' = regra clássica, só com o grupo de cor completo e construindo por igual. */
+  function freeBuild(s) { return !s.rules || s.rules.build !== 'grupo'; }
+
+  /* Por que não dá para construir aqui (texto para o celular), ou '' se dá. */
+  function buildBlock(s, pid, i) {
+    var sp = B.SPACES[i], pr = s.props[i];
+    if (sp.t !== 'prop' || !pr || pr.owner !== pid) return 'Não é seu';
+    if (pr.mortgaged) return 'Está hipotecado';
+    if (pr.houses >= 5) return 'Já tem hotel';
+    if (!freeBuild(s)) {
+      var g = groupOf(i), mine = g.filter(function (k) { return s.props[k] && s.props[k].owner === pid; }).length;
+      if (mine < g.length) return 'Precisa do grupo completo (' + mine + ' de ' + g.length + ')';
+      if (g.some(function (k) { return s.props[k].mortgaged; })) return 'Há imóvel hipotecado no grupo';
+      if (pr.houses > Math.min.apply(null, groupHouses(s, i))) return 'Construa por igual no grupo';
+    }
+    if (P(s, pid).money < houseCost(i)) return 'Saldo insuficiente';
+    return '';
+  }
+
   function canBuild(s, pid, i) {
     var sp = B.SPACES[i], pr = s.props[i];
-    if (sp.t !== 'prop' || !pr || pr.owner !== pid || !hasSet(s, pid, i)) return false;
+    if (sp.t !== 'prop' || !pr || pr.owner !== pid || pr.mortgaged || pr.houses >= 5) return false;
+    if (freeBuild(s)) return P(s, pid).money >= houseCost(i);
+    if (!hasSet(s, pid, i)) return false;
     if (groupOf(i).some(function (k) { return s.props[k].mortgaged; })) return false;
     if (pr.houses >= 5 || pr.houses > Math.min.apply(null, groupHouses(s, i))) return false;
     return P(s, pid).money >= houseCost(i);
   }
   function canSell(s, pid, i) {
     var pr = s.props[i];
-    return !!pr && pr.owner === pid && pr.houses > 0 && pr.houses >= Math.max.apply(null, groupHouses(s, i));
+    if (!pr || pr.owner !== pid || pr.houses < 1) return false;
+    return freeBuild(s) || pr.houses >= Math.max.apply(null, groupHouses(s, i));
   }
   function groupClear(s, i) {
-    return B.SPACES[i].t !== 'prop' || groupHouses(s, i).every(function (h) { return h === 0; });
+    if (B.SPACES[i].t !== 'prop') return true;
+    if (freeBuild(s)) return !s.props[i] || s.props[i].houses === 0;
+    return groupHouses(s, i).every(function (h) { return h === 0; });
   }
   function canMortgage(s, pid, i) {
     var pr = s.props[i];
@@ -217,6 +242,12 @@
         s.log = [];
         log(s, 'Jogo iniciado! ' + cur(s).name + ' começa.');
         return true;
+      case 'rules':
+        if (a.build !== 'livre' && a.build !== 'grupo') return false;
+        if ((s.rules && s.rules.build) === a.build || (!s.rules && a.build === 'livre')) return false;
+        s.rules = { build: a.build };
+        log(s, a.build === 'livre' ? 'Regra: construção em qualquer imóvel' : 'Regra: construção só com o grupo completo');
+        return true;
       case 'reset':
         s.phase = 'lobby'; s.props = {}; s.pending = null; s.card = null; s.move = null; s.winner = null; s.log = [];
         s.players.forEach(resetPlayer);
@@ -367,7 +398,7 @@
   var G = {
     newState: newState, apply: apply, cur: cur, P: P, owned: owned, hasSet: hasSet, rentFor: rentFor,
     houseCost: houseCost, mortgageValue: mortgageValue, unmortgageCost: unmortgageCost,
-    canBuild: canBuild, canSell: canSell, canMortgage: canMortgage, groupClear: groupClear,
+    canBuild: canBuild, buildBlock: buildBlock, freeBuild: freeBuild, canSell: canSell, canMortgage: canMortgage, groupClear: groupClear,
     pendingTotal: pendingTotal, netWorth: netWorth, alive: alive
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = G;

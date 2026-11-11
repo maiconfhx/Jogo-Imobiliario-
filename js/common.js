@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   var PREFIX = 'magnatas-jogo-v1-';
-  var VERSION = '4';   // igual ao version.json; mudar os dois a cada atualização
+  var VERSION = '5';   // igual ao version.json; mudar os dois a cada atualização
 
 
   function qs(name) {
@@ -102,76 +102,163 @@
   }
   function C_qsHas(name) { return new RegExp('[?&]' + name + '=').test(location.search); }
 
-  /* TV: abre a sala e recebe os celulares. */
+  /* Mantém a TV acordada: o protetor de tela do Fire TV entra depois de alguns minutos sem usar o controle
+     (e no jogo ninguém usa o controle). Um vídeo tocando segura o protetor de tela. */
+  function keepAwake() {
+    try {
+      var c = document.createElement('canvas'); c.width = c.height = 16;
+      var x = c.getContext('2d'), v = document.createElement('video');
+      if (!c.captureStream) return;
+      var tick = 0;
+      setInterval(function () { x.fillStyle = (tick++ % 2) ? '#0b1d2a' : '#0c1e2b'; x.fillRect(0, 0, 16, 16); }, 1000);
+      v.muted = true; v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.loop = true;
+      v.srcObject = c.captureStream(1);
+      v.style.cssText = 'position:fixed;right:0;bottom:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1';
+      document.body.appendChild(v);
+      function play() { var r = v.play(); if (r && r.catch) r.catch(function () {}); }
+      play();
+      document.addEventListener('click', play); document.addEventListener('keydown', play);
+      setInterval(function () { if (v.paused) play(); }, 15000);
+    } catch (e) {}
+  }
+
+  /* Só uma aba da TV pode comandar o jogo. Se o jogo for aberto de novo em outra aba,
+     a aba antiga se desliga (senão as duas brigam pela sala e os celulares perdem a conexão). */
+  function claimTab(onRetire) {
+    var me = 't' + Math.random().toString(36).slice(2), K = 'magnatas-tv-owner';
+    try { localStorage.setItem(K, me); } catch (e) { return; }
+    root.addEventListener('storage', function (ev) {
+      if (ev.key !== K || !ev.newValue || ev.newValue === me) return;
+      onRetire();
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99;background:#0b1d2a;color:#fff;display:flex;' +
+        'align-items:center;justify-content:center;text-align:center;font:28px "Trebuchet MS",Arial,sans-serif;padding:40px';
+      d.innerHTML = 'O jogo foi aberto em outra aba.<br>Esta aba foi desligada e pode ser fechada.';
+      document.body.appendChild(d);
+    });
+  }
+
+  /* TV: abre a sala e recebe os celulares.
+     Cada celular manda "ping" a cada 4 s; quem fica 20 s calado é dado como desconectado. */
   function host(room, cb) {
-    var conns = [], peer;
+    var conns = [], peer = null, stopped = false, retryT = null;
+    function count() { cb.count(conns.length); }
+    function drop(c) {
+      var k = conns.indexOf(c);
+      if (k >= 0) { conns.splice(k, 1); count(); }
+      try { c.close(); } catch (e) {}
+    }
+    function again(ms) {
+      clearTimeout(retryT);
+      retryT = setTimeout(function () { if (!stopped) open(); }, ms);
+    }
     function open() {
-      peer = new Peer(PREFIX + room, peerOpts());
-      peer.on('open', function () { cb.status('on'); });
-      peer.on('connection', function (c) {
-        c.on('open', function () { conns.push(c); cb.join(c); cb.count(conns.length); });
-        c.on('data', function (d) { cb.data(d, c); });
-        function drop() {
-          var k = conns.indexOf(c);
-          if (k >= 0) { conns.splice(k, 1); cb.count(conns.length); }
-        }
-        c.on('close', drop); c.on('error', drop);
+      try { if (peer) peer.destroy(); } catch (e) {}
+      var mine = peer = new Peer(PREFIX + room, peerOpts());
+      mine.on('open', function () { if (peer === mine) cb.status('on'); });
+      mine.on('connection', function (c) {
+        c.last = Date.now();
+        c.on('open', function () { c.last = Date.now(); conns.push(c); count(); });
+        c.on('data', function (d) {
+          c.last = Date.now();
+          if (d && d.t === 'ping') { try { c.send({ t: 'pong' }); } catch (e) {} return; }
+          cb.data(d, c);
+        });
+        c.on('close', function () { drop(c); });
+        c.on('error', function () { drop(c); });
       });
-      peer.on('disconnected', function () {
+      mine.on('disconnected', function () {
+        if (peer !== mine || mine.destroyed) return;
         cb.status('off');
-        setTimeout(function () { if (!peer.destroyed) peer.reconnect(); }, 2000);
+        // as conexões já abertas com os celulares continuam funcionando; só reabre o canal para novos celulares
+        setTimeout(function () { if (peer === mine && !mine.destroyed && mine.disconnected) { try { mine.reconnect(); } catch (e) { again(1000); } } }, 2000);
       });
-      peer.on('error', function (e) {
-        if (e.type === 'unavailable-id') { cb.taken(); return; }
+      mine.on('error', function (e) {
+        if (peer !== mine) return;
         if (e.type === 'peer-unavailable') return;
+        if (e.type === 'unavailable-id') {
+          // outra aba/aparelho está com a sala, ou o servidor ainda não soltou a sala desta TV: tenta de novo
+          cb.status('busy'); cb.taken(); again(5000); return;
+        }
         cb.status('off');
-        if (peer.destroyed || !peer.open) setTimeout(function () { try { peer.destroy(); } catch (x) {} open(); }, 3000);
+        if (mine.destroyed || !mine.open) again(3000);
       });
     }
     open();
+    setInterval(function () {
+      var now = Date.now();
+      conns.slice().forEach(function (c) { if (now - c.last > 20000 || !c.open) drop(c); });
+    }, 5000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && !stopped && peer && (peer.destroyed || peer.disconnected)) again(100);
+    });
     return {
       broadcast: function (msg) {
         conns.forEach(function (c) { if (c.open) { try { c.send(msg); } catch (e) {} } });
-      }
+      },
+      stop: function () { stopped = true; clearTimeout(retryT); try { peer.destroy(); } catch (e) {} }
     };
   }
 
-  /* Celular: conecta na sala da TV e reconecta sozinho se cair. */
+  /* Celular: conecta na sala da TV, confere se a TV continua respondendo e reconecta sozinho se cair.
+     Uma ação feita durante a queda fica guardada e é enviada assim que voltar. */
   function client(room, cb) {
-    var peer = null, conn = null, timer = null, dead = false;
-    function retry() {
+    var peer = null, conn = null, timer = null, dead = false, last = 0, pending = null;
+    function isOpen() { return !!(conn && conn.open); }
+    function retry(ms) {
       if (dead) return;
+      conn = null;
       cb.status('off');
       clearTimeout(timer);
-      timer = setTimeout(connect, 2000);
+      timer = setTimeout(connect, ms === undefined ? 1500 : ms);
     }
     function connect() {
+      clearTimeout(timer);
       try { if (peer) peer.destroy(); } catch (e) {}
       conn = null;
       var mine = peer = new Peer(peerOpts());
+      var guard = setTimeout(function () { if (peer === mine && !isOpen()) retry(0); }, 10000);
       mine.on('open', function () {
         var c = mine.connect(PREFIX + room, { reliable: true });
-        var guard = setTimeout(function () { if (!c.open && peer === mine) retry(); }, 8000);
-        c.on('open', function () { clearTimeout(guard); conn = c; cb.status('on'); cb.open(); });
-        c.on('data', function (d) { cb.data(d); });
+        c.on('open', function () {
+          if (peer !== mine) return;
+          clearTimeout(guard); conn = c; last = Date.now();
+          cb.status('on'); cb.open();
+          if (pending && Date.now() - pending.at < 30000) { try { c.send(pending.msg); } catch (e) {} }
+          pending = null;
+        });
+        c.on('data', function (d) { if (peer !== mine) return; last = Date.now(); if (d && d.t === 'pong') return; cb.data(d); });
         c.on('close', function () { if (peer === mine) retry(); });
         c.on('error', function () { if (peer === mine) retry(); });
       });
       mine.on('error', function () { if (peer === mine) retry(); });
-      mine.on('disconnected', function () { if (peer === mine && !(conn && conn.open)) retry(); });
+      mine.on('disconnected', function () { if (peer === mine && !isOpen()) retry(); });
     }
     connect();
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden && !(conn && conn.open)) connect();
-    });
+    setInterval(function () {
+      if (dead || !isOpen()) return;
+      if (Date.now() - last > 12000) { retry(0); return; }   // a TV parou de responder
+      try { conn.send({ t: 'ping' }); } catch (e) { retry(0); }
+    }, 4000);
+    function wake() { if (!document.hidden && !dead && (!isOpen() || Date.now() - last > 6000)) retry(0); }
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('online', wake);
+    window.addEventListener('pageshow', wake);
     return {
-      send: function (msg) { if (conn && conn.open) { conn.send(msg); return true; } return false; },
-      close: function () { dead = true; try { peer.destroy(); } catch (e) {} }
+      /* true = enviado; false = sem conexão agora (a ação foi guardada e vai ao reconectar) */
+      send: function (msg) {
+        if (isOpen()) { try { conn.send(msg); return true; } catch (e) {} }
+        pending = { msg: msg, at: Date.now() };
+        retry(0);
+        return false;
+      },
+      online: isOpen,
+      close: function () { dead = true; clearTimeout(timer); try { peer.destroy(); } catch (e) {} }
     };
   }
 
   root.COMMON = {
     qs: qs, esc: esc, money: money, dieHTML: dieHTML, animateDice: animateDice, beep: beep,
-    wakeLock: wakeLock, host: host, client: client, autoUpdate: autoUpdate, dropParam: dropParam, VERSION: VERSION
+    wakeLock: wakeLock, keepAwake: keepAwake, claimTab: claimTab, host: host, client: client, autoUpdate: autoUpdate, dropParam: dropParam, VERSION: VERSION
   };
 })(this);
