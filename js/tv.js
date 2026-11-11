@@ -18,6 +18,7 @@
   if (C.qs('nova') || !state || !state.room || !state.players) state = G.newState(C.qs('sala').toUpperCase() || newRoom());
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   save();
+  C.dropParam('nova');
 
   /* ---------- tabuleiro ---------- */
   function rc(i) {
@@ -253,6 +254,7 @@
   syncShown();
   render();
   C.wakeLock();
+  C.autoUpdate(function () { return !animating; });
   // Mantém a tela "viva" e reenvia o estado de tempos em tempos (cura celulares que perderam uma mensagem)
   setInterval(function () { net.broadcast({ t: 'state', state: state }); }, 5000);
 })();

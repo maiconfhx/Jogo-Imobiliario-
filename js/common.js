@@ -2,6 +2,8 @@
 (function (root) {
   'use strict';
   var PREFIX = 'magnatas-jogo-v1-';
+  var VERSION = '4';   // igual ao version.json; mudar os dois a cada atualização
+
 
   function qs(name) {
     var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(location.search);
@@ -74,6 +76,32 @@
     document.addEventListener('visibilitychange', function () { if (!document.hidden) req(); });
   }
 
+  /* Confere de tempos em tempos se saiu versão nova do jogo; se saiu, recarrega a página.
+     canReload() deixa adiar a recarga para não interromper uma animação. */
+  function autoUpdate(canReload) {
+    function check() {
+      if (!root.fetch) return;
+      fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.v && j.v !== VERSION) waitReload();
+      }).catch(function () {});
+    }
+    function waitReload() {
+      if (canReload && !canReload()) { setTimeout(waitReload, 3000); return; }
+      var u = location.pathname + location.search.replace(/([?&])(nova|v)=[^&]*&?/g, '$1').replace(/[?&]$/, '');
+      location.replace(u + (u.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now());
+    }
+    setTimeout(check, 5000);
+    setInterval(check, 60000);
+  }
+
+  /* Tira ?nova=1 do endereço depois de usado, para uma recarga não apagar a partida de novo. */
+  function dropParam(name) {
+    if (!C_qsHas(name) || !root.history || !history.replaceState) return;
+    var q = location.search.replace(new RegExp('([?&])' + name + '=[^&]*&?'), '$1').replace(/[?&]$/, '');
+    history.replaceState(null, '', location.pathname + q);
+  }
+  function C_qsHas(name) { return new RegExp('[?&]' + name + '=').test(location.search); }
+
   /* TV: abre a sala e recebe os celulares. */
   function host(room, cb) {
     var conns = [], peer;
@@ -144,6 +172,6 @@
 
   root.COMMON = {
     qs: qs, esc: esc, money: money, dieHTML: dieHTML, animateDice: animateDice, beep: beep,
-    wakeLock: wakeLock, host: host, client: client
+    wakeLock: wakeLock, host: host, client: client, autoUpdate: autoUpdate, dropParam: dropParam, VERSION: VERSION
   };
 })(this);

@@ -47,3 +47,8 @@ Se a TV ou o celular forem recarregados, a partida continua de onde parou. Para 
 - `js/game.js`: regras; `js/board.js`: casas, preços e cartas.
 - Teste das regras: `node test/fuzz.js`.
 - Para rodar local: `python3 -m http.server` e abra `http://IP-DO-PC:8000` na TV.
+
+### Publicando uma versão nova
+
+Aumente o número em `version.json` e em `VERSION` (`js/common.js`), e o `?v=` nos arquivos `.html`.
+A TV e os celulares abertos conferem o `version.json` a cada minuto e recarregam sozinhos, sem perder a partida.

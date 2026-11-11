@@ -24,6 +24,7 @@
   if (C.qs('nova') || !state || !state.room || !state.players) state = G.newState(C.qs('sala').toUpperCase() || newRoom());
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   save();
+  C.dropParam('nova');
 
   var el = {};
   ['roominfo', 'lobby', 'game', 'players', 'turn', 'status', 'card', 'log'].forEach(function (id) { el[id] = document.getElementById(id); });
@@ -603,6 +604,7 @@
   renderHud();
   requestAnimationFrame(frame);
   C.wakeLock();
+  C.autoUpdate(function () { return !animating; });
   setInterval(function () { net.broadcast({ t: 'state', state: state }); }, 5000);
   window.__magnatas = { state: function () { return state; }, apply: function (a) { if (G.apply(state, a)) onState(); } };
 })();

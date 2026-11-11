@@ -367,5 +367,6 @@
   if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission !== 'function') window.addEventListener('devicemotion', onMotion);
 
   C.wakeLock();
+  C.autoUpdate(function () { return !rolling && !ui.confirm; });
   connect();
 })();
